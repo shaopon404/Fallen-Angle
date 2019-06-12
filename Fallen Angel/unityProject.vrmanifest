@@ -5,7 +5,7 @@
       "app_key": "application.generated.unity.fallenangel.exe",
       "launch_type": "url",
       "url": "steam://launch/",
-      "action_manifest_path": "D:\\UnityProject\\Fallen Angel\\actions.json",
+      "action_manifest_path": "D:\\UnityRepository\\Fallen Angel\\Fallen Angel\\actions.json",
       "strings": {
         "en_us": {
           "name": "Fallen Angel [Testing]"

@@ -6,6 +6,9 @@ TagManager:
   tags:
   - Enemy
   - Standable
+  - LifePotion
+  - ManaPotion
+  - PhoenixFeather
   layers:
   - Default
   - TransparentFX

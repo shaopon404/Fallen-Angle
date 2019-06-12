@@ -11,6 +11,9 @@ public class Player : IChara
     public Transform head;
     public PlayerWeapon eq_weapon;
     public List<PlayerWeapon> weaponList = new List<PlayerWeapon>();
+    public Iitem eq_item;
+    public List<Iitem> itemList = new List<Iitem>();
+    public Dictionary<string, Iitem> itemDict = new Dictionary<string, Iitem>();
     public bool teleporting = false;
     public bool show_weapon = false;
     public float warp_speed;
@@ -28,13 +31,13 @@ public class Player : IChara
     private float t = 0;
     private float recover_t = 0;
     public Queue<int> attackQueue = new Queue<int>();
+    public PlayerUIPanel uIPanel;
 
-    public Transform status_panel;
-    public bool show_status_panel = false;
+    public bool show_panel = false;
+    public bool show_item = false;
 
     public Image HP_Bar;
     public Image MP_Bar;
-
     void Start()
     {
         cur_hp = hp;
@@ -42,10 +45,11 @@ public class Player : IChara
         head = FindObjectOfType<VRCameraHook>().transform;
         ViveInput.AddPressUp(HandRole.RightHand, ControllerButton.Grip, EquiptWeapon);
         ViveInput.AddPressDown(HandRole.RightHand, ControllerButton.Trigger, ShiftBreak);
-        ViveInput.AddPressUp(HandRole.LeftHand, ControllerButton.Grip, ShowStatusPanel);
-        ViveInput.AddPressDown(HandRole.LeftHand, ControllerButton.Pad, ShiftDodge);
+        //ViveInput.AddPressDown(HandRole.LeftHand, ControllerButton.Pad, ShiftDodge);
+        ViveInput.AddPressDown(HandRole.LeftHand, ControllerButton.Grip, ShowItem);
+        ViveInput.AddPressDown(HandRole.LeftHand, ControllerButton.Trigger, UseItem);
         floating_platform.localScale = Vector3.zero;
-        status_panel.transform.localScale = Vector3.zero;
+        uIPanel.transform.localScale = Vector3.zero;
     }
 
     // Update is called once per frame
@@ -60,6 +64,7 @@ public class Player : IChara
             traveledDistance = 0;
 
             WeaponTracking();
+            ItemTracking();
         }
         else
         {
@@ -81,6 +86,13 @@ public class Player : IChara
 
         HP_Bar.fillAmount = ((float)cur_hp / hp);
         MP_Bar.fillAmount = ((float)cur_mp / mp);
+
+        if (ViveInput.GetPadTouchAxis(HandRole.LeftHand) != Vector2.zero)
+            show_panel = true;
+        else
+            show_panel = false;
+
+        ShowStatusPanel();
     }
 
     private void Recover()
@@ -109,6 +121,18 @@ public class Player : IChara
                 eq_weapon.rigid.isKinematic = true;
                 eq_weapon.isHit = false;
                 eq_weapon.isBlock = false;
+            }
+        }
+    }
+
+    private void ItemTracking()
+    {
+        if (show_item)
+        {
+            if (eq_item != null)
+            {
+                eq_item.gameObject.transform.position = transform.TransformPoint(VivePose.GetPose(HandRole.LeftHand).pos);
+                eq_item.gameObject.transform.rotation = VivePose.GetPose(HandRole.LeftHand).rot;
             }
         }
     }
@@ -151,16 +175,17 @@ public class Player : IChara
         if (!teleporting)
         {
             if (weaponList.Count > 0)
+            {
                 show_weapon = !show_weapon;
+                handParticle.Play();
+            }
 
             if (show_weapon)
             {
                 eq_weapon = weaponList[0];
                 eq_weapon.gameObject.SetActive(true);
             }
-            handParticle.Play();
-
-            if (!show_weapon)
+            else
             {
                 if (eq_weapon != null)
                 {
@@ -168,6 +193,48 @@ public class Player : IChara
                     eq_weapon = null;
                 }
             }
+        }
+    }
+
+    public void CollectItem(Iitem item)
+    {
+        if (!itemDict.ContainsKey(item.item_name))
+        {
+            itemDict.Add(item.item_name, item);
+            item.Init();
+            item.gameObject.SetActive(false);
+            uIPanel.AddItem(item.item_name);
+        }
+    }
+
+    public void ShowItem()
+    {
+        string pName = uIPanel.GetFocousPanelName();
+        if (uIPanel.itemPanelDict[pName].num > 0)
+            show_item = !show_item;
+
+        if (show_item)
+        {
+            eq_item = itemDict[pName];
+            eq_item.gameObject.SetActive(true);
+        }
+        else
+        {
+            if (eq_item != null)
+            {
+                eq_item.gameObject.SetActive(false);
+                eq_item = null;
+            }
+        }
+    }
+
+    public void UseItem()
+    {
+        if (eq_item != null)
+        {
+            eq_item.Use();
+            uIPanel.ConsumeItem(eq_item.item_name);
+            eq_item = null;
         }
     }
 
@@ -261,15 +328,13 @@ public class Player : IChara
 
     private void ShowStatusPanel()
     {
-        show_status_panel = !show_status_panel;
-
-        if (show_status_panel)
+        if (show_panel)
         {
-            status_panel.DOScale(Vector3.one, 0.3f);
+            uIPanel.transform.DOScale(new Vector3(0.005f, 0.005f, 0.005f), 0.3f);
         }
         else
         {
-            status_panel.DOScale(Vector3.zero, 0.3f);
+            uIPanel.transform.DOScale(Vector3.zero, 0.3f);
         }
 
     }

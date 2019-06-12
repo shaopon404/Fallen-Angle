@@ -4,21 +4,27 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using HTC.UnityPlugin.Vive;
+
+public enum State
+{
+    None,
+    Search,
+    Attack,
+}
 public class Enemy : IChara
 {
+    public State state;
     private NavMeshAgent meshAgent;
     private Transform player;
     public float _radius;
     public float distance;
+    public float angle;
     private Animator animator;
-    public bool searching = false;
-    public bool in_range = false;
     public bool weak = false;
-    public Collider[] _hitColliders = new Collider[0];
-    public float rotSpeed;
+    private Collider[] _hitColliders = new Collider[0];
     private Vector3 offset = new Vector3(0, 2f, 0);
-    protected LayerMask _playerMask;
-    public EnemyWeapon[] weapons;
+    private LayerMask _playerMask;
+    private EnemyWeapon[] weapons;
 
     public List<Action> shortAttack = new List<Action>();
     public List<Action> middleAttack = new List<Action>();
@@ -26,7 +32,8 @@ public class Enemy : IChara
 
     public Queue<Action> actionQueue = new Queue<Action>();
     public Action curAction;
-    public bool is_attacking;
+    public bool has_choice = false;
+    public Transform hp_bar;
 
     void Start()
     {
@@ -36,68 +43,67 @@ public class Enemy : IChara
         animator = GetComponent<Animator>();
         _playerMask = LayerMask.GetMask("Chara");
         weapons = FindObjectsOfType<EnemyWeapon>();
-
+        state = State.Search;
         shortAttack.Add(Slash);
-        shortAttack.Add(DoubleSlash);
-        shortAttack.Add(HeavySlash);
-        //shortAttack.Add(Wings);
-        //middleAttack.Add();
-        //longAttack.Add(Dash);
-
-        StartCoroutine(StartSearching());
+        middleAttack.Add(DoubleSlash);
+        middleAttack.Add(HeavySlash);
+        longAttack.Add(Dash);
     }
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Q))
-            Debug.Log(actionQueue.Count);
-        if (searching)
-        {
-            float distace = GetDistance();
+            distance = GetDistance();
+            angle = GetAngle();
+
             if (animator.GetCurrentAnimatorStateInfo(0).IsTag("Stand") || animator.GetCurrentAnimatorStateInfo(0).IsTag("Walk"))
             {
-                if (actionQueue.Count > 0)
+                switch (state)
                 {
-                    animator.SetBool("attack", true);
-                    if (curAction == null)
-                    {
-                        curAction = actionQueue.Dequeue();
-                        curAction.Invoke();
-                        return;
-                    }
-                }
-                else
-                {
-                    animator.SetBool("attack", false);
-                    ChooseAttack(distace);
-                }
-                meshAgent.enabled = true;
-                float d = Vector3.Distance(meshAgent.transform.position, player.position);
-                if (d >= 2f)
-                {
-                    animator.SetBool("walk", true);
-                    Vector3 destination = Vector3.Lerp(transform.position, player.position, 0.6f);
-                    meshAgent.SetDestination(new Vector3(destination.x, 0, destination.z));
-                }
-                else
-                {
-                    meshAgent.destination = transform.position;
-                    animator.SetBool("walk", false);
+                    case State.Search:
+                        if (curAction == null)
+                        {
+                            meshAgent.enabled = true;
+                            float d = Vector3.Distance(meshAgent.transform.position, player.position);
+                            if (!has_choice || angle > 60)
+                            {
+                                animator.SetBool("walk", true);
+                                Vector3 destination = Vector3.Lerp(transform.position, player.position, 0.6f);
+                                meshAgent.SetDestination(new Vector3(destination.x, 0, destination.z));
+                                ChooseAttack(distance);
+                            }
+                            else
+                            {
+                                meshAgent.destination = transform.position;
+                                animator.SetBool("walk", false);
+                                state = State.Attack;
+                            }
+                        }
+                        break;
+                    case State.Attack:
+                        meshAgent.enabled = false;
+                        if (actionQueue.Count > 0)
+                        {
+                            animator.SetBool("attack", true);
+                            if (curAction == null)
+                            {
+                                meshAgent.enabled = false;
+                                curAction = actionQueue.Dequeue();
+                                curAction.Invoke();
+                            }
+                        }
+                        else
+                        {
+                            has_choice = false;
+                            state = State.Search;
+                        }
+                        break;
                 }
             }
-            else
-            {
-                meshAgent.enabled = false;
-            }
-        }
     }
 
     private void FixedUpdate()
     {
-        if (searching)
-        {
-            _hitColliders = Physics.OverlapSphere(transform.position + offset, _radius, _playerMask);
-        }
+        _hitColliders = Physics.OverlapSphere(transform.position + offset, _radius, _playerMask);
     }
 
     public override void ReceiveDamage(int dmg)
@@ -109,27 +115,22 @@ public class Enemy : IChara
 
     private float GetDistance()
     {
-        float distance = Mathf.Infinity;
+        float d = Mathf.Infinity;
         for (int i = 0; i < _hitColliders.Length; i++)
         {
             if (_hitColliders[i].gameObject.CompareTag("Player"))
             {
-                distance = Vector3.Distance(gameObject.transform.position, _hitColliders[i].gameObject.transform.position);
-                in_range = true;
+                d = Vector3.Distance(gameObject.transform.position, _hitColliders[i].gameObject.transform.position);
                 break;
-            }
-            else
-            {
-                in_range = false;
             }
         }
         //Debug.Log(distance);
-        return distance;
+        return d;
     }
 
     public float GetAngle()
     {
-        float angle = Mathf.Infinity;
+        float a = Mathf.Infinity;
         for (int i = 0; i < _hitColliders.Length; i++)
         {
             if (_hitColliders[i].gameObject.CompareTag("Player"))
@@ -137,58 +138,91 @@ public class Enemy : IChara
                 Vector3 playerPos = new Vector3(_hitColliders[i].transform.position.x, 0, _hitColliders[i].transform.position.z);
                 Vector3 myPos = new Vector3(transform.position.x, 0, transform.position.z);
                 Vector3 dirToTarget = (playerPos - myPos);
-                angle = Vector3.Angle(transform.rotation.eulerAngles, dirToTarget);
+                //Debug.Log(transform.rotation.eulerAngles + " / "+ dirToTarget);
+                a = Vector3.Angle(transform.forward, dirToTarget);
                 break;
             }
         }
         //Debug.Log(angle);
-        return angle;
+        return a;
     }
 
     private void ChooseAttack(float distace)
     {
-        float angle = GetAngle();
-        if (angle < 0 || angle > 180)
+        //Debug.Log("ChooseAttack");
+        has_choice = false;
+
+        if (angle > 60)
         {
-            if (angle < 0)
-                transform.Rotate(Vector3.up * rotSpeed * Time.deltaTime);
-            if (angle > 180)
-                transform.Rotate(Vector3.down * rotSpeed * Time.deltaTime);
+            actionQueue.Clear();
+            state = State.Search;
         }
-        else if (distace < 4f)
+        else
         {
+            if (distace > 6f)
+            {
+                int dash = UnityEngine.Random.Range(1, 100);
+                Debug.Log(dash);
+                if (dash > 30)
+                    if (longAttack.Count > 0)
+                    {
+                        int ranNum = UnityEngine.Random.Range(0, longAttack.Count);
+                        actionQueue.Enqueue(longAttack[ranNum]);
+                        Debug.Log("Enqueue " + longAttack[ranNum].Method.Name);
+                        has_choice = true;
+                    }
+            }
+
             int ranTime = UnityEngine.Random.Range(1, 3);
             for (int i = 0; i < ranTime; i++)
             {
-                int ranNum = UnityEngine.Random.Range(0, shortAttack.Count);
-                actionQueue.Enqueue(shortAttack[ranNum]);
-                Debug.Log("Enqueue " + shortAttack[ranNum].Method.Name);
+                if (distace > 2 && distace <= 3)
+                {
+                    if (middleAttack.Count > 0)
+                    {
+                        int ranNum = UnityEngine.Random.Range(0, middleAttack.Count);
+                        actionQueue.Enqueue(middleAttack[ranNum]);
+                        Debug.Log("Enqueue " + middleAttack[ranNum].Method.Name);
+                        has_choice = true;
+                    }
+                }
+                else if (distace <= 2f)
+                {
+                    if (shortAttack.Count > 0)
+                    {
+                        int ranNum = UnityEngine.Random.Range(0, shortAttack.Count);
+                        actionQueue.Enqueue(shortAttack[ranNum]);
+                        Debug.Log("Enqueue " + shortAttack[ranNum].Method.Name);
+                        has_choice = true;
+                    }
+                }
+
             }
+        }
+        if (!has_choice)
+        {
+            state = State.Search;
         }
     }
 
     #region short attack
     private void Slash()
     {
-        Debug.Log("slash");
+        //Debug.Log("slash");
         animator.SetTrigger("slash");
-    }
-
-    private void DoubleSlash()
-    {
-        Debug.Log("double_slash");
-        animator.SetTrigger("double_slash");
-    }
-
-    private void Wings()
-    {
-        animator.SetTrigger("wings");
     }
     #endregion
 
     #region middle attack
+    private void DoubleSlash()
+    {
+        //Debug.Log("double_slash");
+        animator.SetTrigger("double_slash");
+    }
+
     private void HeavySlash()
     {
+        //Debug.Log("double_slash");
         animator.SetTrigger("heavy_slash");
     }
     #endregion
@@ -196,22 +230,8 @@ public class Enemy : IChara
     #region long attack
     private void Dash()
     {
+        Debug.Log("Dash");
         animator.SetTrigger("dash");
-    }
-
-    private void Jump()
-    {
-        animator.SetTrigger("jump");
-    }
-
-    private void Bolt()
-    {
-        animator.SetTrigger("bolt");
-    }
-
-    private void Laser()
-    {
-        animator.SetTrigger("laser");
     }
     #endregion
 
@@ -248,14 +268,10 @@ public class Enemy : IChara
     }
     #endregion
 
-    private IEnumerator StartSearching()
+    public void Dead()
     {
-        yield return new WaitForSeconds(3.2f);
-        searching = true;
-        foreach (var weapon in weapons)
-        {
-            weapon.Init();
-        }
+        animator.SetBool("dead", true);
+        hp_bar.gameObject.SetActive(false);
     }
 
     private void OnDrawGizmosSelected()

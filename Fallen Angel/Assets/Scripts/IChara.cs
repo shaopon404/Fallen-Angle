@@ -14,7 +14,7 @@ public abstract class IChara : MonoBehaviour
         if (cur_hp > 0)
         {
             cur_hp -= dmg;
-            //Debug.Log(gameObject.name + " ReceiveDamage : " + dmg);
+            Debug.Log(gameObject.name + " ReceiveDamage : " + dmg);
         }          
     }
 }
