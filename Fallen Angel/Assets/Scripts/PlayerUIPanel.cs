@@ -36,6 +36,7 @@ public class PlayerUIPanel : MonoBehaviour
             itemPanelDict.Add(pn[i], itemPanel);
             i++;
         }
+        SwitchItem(curFocus);
     }
 
     // Update is called once per frame
@@ -54,18 +55,23 @@ public class PlayerUIPanel : MonoBehaviour
             if (curFocus < 0)
                 curFocus = 2;
 
-            for (int i = 0; i < panels.Length; i++)
+            SwitchItem(curFocus);
+        }
+    }
+
+    public void SwitchItem(int focus)
+    {
+        for (int i = 0; i < panels.Length; i++)
+        {
+            if (i == focus)
             {
-                if (i == curFocus)
-                {
-                    panels[i].DOScale(new Vector3(1.2f, 1.2f, 1.2f), 0.3f);
-                    itemPanels[i].image.color = new Color(0, 255, 255, 136);
-                }
-                else
-                {
-                    panels[i].DOScale(Vector3.one, 0.3f);
-                    itemPanels[i].image.color = new Color(255, 255, 255, 136);
-                }
+                panels[i].DOScale(new Vector3(1.2f, 1.2f, 1.2f), 0.3f);
+                itemPanels[i].image.color = new Color(0, 255, 255, 136);
+            }
+            else
+            {
+                panels[i].DOScale(Vector3.one, 0.3f);
+                itemPanels[i].image.color = new Color(255, 255, 255, 136);
             }
         }
     }

@@ -5,11 +5,10 @@ using HTC.UnityPlugin.Vive;
 
 public class PlayerWeapon : Weapon
 {
-    public Player owner;
+    private Player owner;
     public Rigidbody rigid;
     public bool isHit;
     public bool isBlock;
-    public Vector3 hitSpot;
     public ParticleSystem hit_particle;
     public ParticleSystem[] trail_particles;
 

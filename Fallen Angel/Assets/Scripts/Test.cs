@@ -30,4 +30,16 @@ public class Test : MonoBehaviour
     {
         Debug.Log("Test");
     }
+    //self
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (collision.gameObject.CompareTag("Enemy"))
+            Dead();
+    }
+    
+    private void Dead()
+    {
+        
+
+    }
 }

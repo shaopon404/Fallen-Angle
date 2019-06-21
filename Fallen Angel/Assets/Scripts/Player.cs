@@ -8,21 +8,22 @@ using UnityEngine.UI;
 
 public class Player : IChara
 {
-    public Transform head;
-    public PlayerWeapon eq_weapon;
-    public List<PlayerWeapon> weaponList = new List<PlayerWeapon>();
-    public Iitem eq_item;
-    public List<Iitem> itemList = new List<Iitem>();
-    public Dictionary<string, Iitem> itemDict = new Dictionary<string, Iitem>();
+    private Rigidbody rig;
+    private Transform head;
+    private PlayerWeapon eq_weapon;
+    private List<PlayerWeapon> weaponList = new List<PlayerWeapon>();
+    private Iitem eq_item;
+    private List<Iitem> itemList = new List<Iitem>();
+    private Dictionary<string, Iitem> itemDict = new Dictionary<string, Iitem>();
     public bool teleporting = false;
     public bool show_weapon = false;
     public float warp_speed;
-    public float dodge_speed;
+    private float dodge_speed;
     private float startTime;
-    public Vector3 startPos, warpPos = Vector3.zero;
+    private Vector3 startPos, warpPos = Vector3.zero;
     private Vector3 offset;
     public float traveledDistance;
-
+    public bool dead = false;
     public ParticleSystem handParticle;
     public ParticleSystem[] body_trials;
 
@@ -32,7 +33,8 @@ public class Player : IChara
     private float recover_t = 0;
     public Queue<int> attackQueue = new Queue<int>();
     public PlayerUIPanel uIPanel;
-
+    public PlayerMsgPanel HmdMsg;
+    public Transform deadMsg;
     public bool show_panel = false;
     public bool show_item = false;
 
@@ -42,57 +44,74 @@ public class Player : IChara
     {
         cur_hp = hp;
         cur_mp = mp;
+        rig = GetComponent<Rigidbody>();
+        rig.isKinematic = true;
+        rig.freezeRotation = true;
         head = FindObjectOfType<VRCameraHook>().transform;
         ViveInput.AddPressUp(HandRole.RightHand, ControllerButton.Grip, EquiptWeapon);
         ViveInput.AddPressDown(HandRole.RightHand, ControllerButton.Trigger, ShiftBreak);
-        //ViveInput.AddPressDown(HandRole.LeftHand, ControllerButton.Pad, ShiftDodge);
+        ViveInput.AddPressDown(HandRole.LeftHand, ControllerButton.Pad, ShiftDodge);
         ViveInput.AddPressDown(HandRole.LeftHand, ControllerButton.Grip, ShowItem);
         ViveInput.AddPressDown(HandRole.LeftHand, ControllerButton.Trigger, UseItem);
         floating_platform.localScale = Vector3.zero;
         uIPanel.transform.localScale = Vector3.zero;
+        deadMsg.gameObject.SetActive(false);
     }
 
     // Update is called once per frame
     void Update()
     {
-        Recover();
-
-        if (!teleporting)
+        if (!dead)
         {
-            DequeueAttackCommand();
+            Recover();
 
-            traveledDistance = 0;
-
-            WeaponTracking();
-            ItemTracking();
-        }
-        else
-        {
-            if (eq_weapon.isHit || eq_weapon.isBlock)
+            if (!teleporting)
             {
-                CancelInvoke();
-                Warp();
+                DequeueAttackCommand();
+
+                traveledDistance = 0;
+
+                WeaponTracking();
+                ItemTracking();
             }
-            if (warpPos != Vector3.zero)
-                if (Vector3.Distance(transform.position, warpPos) < 0.01f)
+            else
+            {
+                if (eq_weapon.isHit || eq_weapon.isBlock)
                 {
-                    eq_weapon.StopTrails();
-                    warpPos = Vector3.zero;
-                    teleporting = false;
+                    CancelInvoke();
+                    Warp();
                 }
+                if (warpPos != Vector3.zero)
+                    if (Vector3.Distance(transform.position, warpPos) < 0.01f)
+                    {
+                        eq_weapon.StopTrails();
+                        warpPos = Vector3.zero;
+                        teleporting = false;
+                    }
+            }
+            Float();
         }
-
-        Float();
-
-        HP_Bar.fillAmount = ((float)cur_hp / hp);
-        MP_Bar.fillAmount = ((float)cur_mp / mp);
-
         if (ViveInput.GetPadTouchAxis(HandRole.LeftHand) != Vector2.zero)
             show_panel = true;
         else
             show_panel = false;
 
+        HP_Bar.fillAmount = ((float)cur_hp / hp);
+        MP_Bar.fillAmount = ((float)cur_mp / mp);
+
         ShowStatusPanel();
+    }
+
+    public override void ReceiveDamage(int dmg)
+    {
+        base.ReceiveDamage(dmg);
+        if (cur_hp <= 0)
+        {
+            dead = true;
+            deadMsg.gameObject.SetActive(true);
+        }
+        else
+            dead = false;
     }
 
     private void Recover()
@@ -107,6 +126,11 @@ public class Player : IChara
 
             recover_t = Time.time;
         }
+
+        if (cur_mp <= 0)
+            rig.isKinematic = false;
+        else
+            rig.isKinematic = true;
     }
 
     private void WeaponTracking()
@@ -154,7 +178,10 @@ public class Player : IChara
         if (attackQueue.Count > 0)
         {
             int dmg = attackQueue.Dequeue();
-            FindObjectOfType<Enemy>().ReceiveDamage(Mathf.RoundToInt(dmg + dmg * traveledDistance / 5));
+            float bonus = traveledDistance / 5;
+            FindObjectOfType<Enemy>().ReceiveDamage(Mathf.RoundToInt(dmg + dmg * bonus));
+            if (bonus > 0)
+                HmdMsg.ShowMessege("Attack x " + (1 + bonus).ToString());
             eq_weapon.hit_particle.Play();
             ViveInput.TriggerHapticPulse(HandRole.RightHand, 1000);
         }
@@ -204,6 +231,7 @@ public class Player : IChara
             item.Init();
             item.gameObject.SetActive(false);
             uIPanel.AddItem(item.item_name);
+            HmdMsg.ShowMessege("Get+ " + item.item_name);
         }
     }
 
@@ -235,13 +263,14 @@ public class Player : IChara
             eq_item.Use();
             uIPanel.ConsumeItem(eq_item.item_name);
             eq_item = null;
+            show_item = false;
         }
     }
 
     public void ShiftBreak()
     {
         if (show_weapon)
-            if (!eq_weapon.isBlock)
+            if (!eq_weapon.isBlock && cur_mp > 5) 
             {
                 teleporting = true;
                 startTime = Time.time;
@@ -252,6 +281,8 @@ public class Player : IChara
                 eq_weapon.PlayTrails();
                 CancelInvoke();
                 Invoke("Warp", 0.5f);
+                if (cur_mp >= 5)
+                    cur_mp -= 5;
             }
     }
 

@@ -12,7 +12,7 @@ public class ManaPotion : Iitem
     public override void Use()
     {
         if (owner.cur_mp < owner.mp)
-            owner.cur_mp += 25;
+            owner.cur_mp += 50;
         if (owner.cur_mp > owner.mp)
             owner.cur_mp = owner.mp;
         particle.Play();

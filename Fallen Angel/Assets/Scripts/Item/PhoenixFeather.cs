@@ -12,6 +12,7 @@ public class PhoenixFeather : Iitem
     public override void Use()
     {
         owner.cur_hp = owner.hp;
+        owner.cur_mp = owner.mp;
         particle.Play();
         meshRenderer.enabled = false;
         hitbox.enabled = false;

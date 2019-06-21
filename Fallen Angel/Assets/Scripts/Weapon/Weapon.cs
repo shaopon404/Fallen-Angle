@@ -5,7 +5,7 @@ using HTC.UnityPlugin.Vive;
 
 public abstract class Weapon : MonoBehaviour
 {
-     public Collider hitbox;
+    private Collider hitbox;
     public int damage;
     // Start is called before the first frame update
     public void Init()

@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.AI;
 using HTC.UnityPlugin.Vive;
 
@@ -21,28 +22,33 @@ public class Enemy : IChara
     public float angle;
     private Animator animator;
     public bool weak = false;
+    public bool dead = false;
     private Collider[] _hitColliders = new Collider[0];
     private Vector3 offset = new Vector3(0, 2f, 0);
     private LayerMask _playerMask;
     private EnemyWeapon[] weapons;
 
-    public List<Action> shortAttack = new List<Action>();
-    public List<Action> middleAttack = new List<Action>();
-    public List<Action> longAttack = new List<Action>();
+    private List<Action> shortAttack = new List<Action>();
+    private List<Action> middleAttack = new List<Action>();
+    private List<Action> longAttack = new List<Action>();
 
-    public Queue<Action> actionQueue = new Queue<Action>();
-    public Action curAction;
+    private Queue<Action> actionQueue = new Queue<Action>();
+    private Action curAction;
     public bool has_choice = false;
     public Transform hp_bar;
+    public Image hp_bar_img;
 
     void Start()
     {
+        cur_hp = hp;
+        cur_mp = mp;
         meshAgent = GetComponent<NavMeshAgent>();
         meshAgent.destination = transform.position;
         player = FindObjectOfType<VRCameraHook>().transform;
         animator = GetComponent<Animator>();
         _playerMask = LayerMask.GetMask("Chara");
         weapons = FindObjectsOfType<EnemyWeapon>();
+        hp_bar_img = hp_bar.GetComponentInChildren<Image>();
         state = State.Search;
         shortAttack.Add(Slash);
         middleAttack.Add(DoubleSlash);
@@ -52,6 +58,14 @@ public class Enemy : IChara
 
     void Update()
     {
+        if (!dead)
+        {
+            if (cur_hp <= 0)
+            {
+                Dead();
+                return;
+            }
+
             distance = GetDistance();
             angle = GetAngle();
 
@@ -99,6 +113,8 @@ public class Enemy : IChara
                         break;
                 }
             }
+        }
+        hp_bar_img.fillAmount = (float)cur_hp / hp;
     }
 
     private void FixedUpdate()
@@ -168,7 +184,7 @@ public class Enemy : IChara
                     {
                         int ranNum = UnityEngine.Random.Range(0, longAttack.Count);
                         actionQueue.Enqueue(longAttack[ranNum]);
-                        Debug.Log("Enqueue " + longAttack[ranNum].Method.Name);
+                        //Debug.Log("Enqueue " + longAttack[ranNum].Method.Name);
                         has_choice = true;
                     }
             }
@@ -182,7 +198,7 @@ public class Enemy : IChara
                     {
                         int ranNum = UnityEngine.Random.Range(0, middleAttack.Count);
                         actionQueue.Enqueue(middleAttack[ranNum]);
-                        Debug.Log("Enqueue " + middleAttack[ranNum].Method.Name);
+                        //Debug.Log("Enqueue " + middleAttack[ranNum].Method.Name);
                         has_choice = true;
                     }
                 }
@@ -192,7 +208,7 @@ public class Enemy : IChara
                     {
                         int ranNum = UnityEngine.Random.Range(0, shortAttack.Count);
                         actionQueue.Enqueue(shortAttack[ranNum]);
-                        Debug.Log("Enqueue " + shortAttack[ranNum].Method.Name);
+                        //Debug.Log("Enqueue " + shortAttack[ranNum].Method.Name);
                         has_choice = true;
                     }
                 }
@@ -230,7 +246,7 @@ public class Enemy : IChara
     #region long attack
     private void Dash()
     {
-        Debug.Log("Dash");
+        //Debug.Log("Dash");
         animator.SetTrigger("dash");
     }
     #endregion
@@ -270,7 +286,9 @@ public class Enemy : IChara
 
     public void Dead()
     {
-        animator.SetBool("dead", true);
+        dead = true;
+        meshAgent.enabled = false;
+        animator.SetTrigger("dead");
         hp_bar.gameObject.SetActive(false);
     }
 
